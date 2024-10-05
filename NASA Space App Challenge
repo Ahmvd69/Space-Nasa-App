@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Interactive Exoplanet and Solar System Explorer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --text-color: white;
+            --shadow-color: #a3b1c6;
+            --highlight-color: #ffffff;
+        }
+
+        .dark-mode {
+            --bg-color: #1a1a1a;
+            --text-color: white;
+            --shadow-color: #000000;
+            --highlight-color: #2a2a2a;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        #particles-js {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+        }
+
+        .neumorphic {
+            background: var(--bg-color);
+            box-shadow: 5px 5px 10px var(--shadow-color), -5px -5px 10px var(--highlight-color);
+            border-radius: 15px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .neumorphic:hover {
+            box-shadow: 2px 2px 5px var(--shadow-color), -2px -2px 5px var(--highlight-color);
+        }
+
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            max-width: 300px;
+        }
+
+        #celestial-list {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .celestial-item {
+            cursor: pointer;
+            margin-bottom: 10px;
+            padding: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .celestial-item:hover {
+            transform: translateY(-3px);
+        }
+
+        #points-section {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            width: 80%;
+            max-width: 600px;
+        }
+
+        .point {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin: 0 10px;
+            transition: transform 0.3s;
+        }
+
+        .point:hover {
+            transform: scale(1.5);
+        }
+
+        #dark-mode-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 24px;
+        }
+
+        #mode-toggle {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            z-index: 1000;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            color: var(--text-color);
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        .floating {
+            animation: float 4s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div id="particles-js"></div>
+    <div id="canvas-container"></div>
+    <button id="dark-mode-toggle">🌓</button>
+    <button id="mode-toggle">Switch to Solar System</button>
+    <div id="info-panel" class="neumorphic">
+        <h2>Celestial Explorer</h2>
+        <p>Click on a celestial body in the list to view details and interact with it in 3D space.</p>
+    </div>
+    <div id="celestial-list" class="neumorphic"></div>
+    <div id="points-section" class="neumorphic">
+        <h3>Key Points about Celestial Bodies</h3>
+        <div class="point floating" style="background-color: #ff6b6b;" title="Exoplanets are planets outside our solar system"></div>
+        <div class="point floating" style="background-color: #4ecdc4;" title="Over 4,000 exoplanets have been discovered"></div>
+        <div class="point floating" style="background-color: #45b7d1;" title="Some exoplanets may be habitable"></div>
+        <div class="point floating" style="background-color: #f7b731;" title="Our solar system has 8 planets and numerous dwarf planets"></div>
+        <div class="point floating" style="background-color: #5d5d5d;" title="Studying celestial bodies helps us understand the universe"></div>
+    </div>
+
+    <script>
+        // Three.js setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // Improved lighting
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 3, 5);
+        scene.add(directionalLight);
+
+        // Camera position
+        camera.position.z = 50;
+
+        // Texture loader
+        const textureLoader = new THREE.TextureLoader();
+
+        // Celestial body data
+        const celestialBodies = [
+            // Exoplanets
+            { name: "Kepler-16b", radius: 0.7, color: 0xffb347, description: "A Saturn-mass planet orbiting two stars", texture: "https://picsum.photos/id/1020/1024/512", type: "exoplanet" },
+            { name: "HD 209458 b", radius: 1.4, color: 0x4169e1, description: "One of the first exoplanets to have its atmosphere detected", texture: "https://picsum.photos/id/1025/1024/512", type: "exoplanet" },
+            { name: "Gliese 581 g", radius: 0.5, color: 0x32cd32, description: "Potentially habitable super-Earth in the Gliese 581 system", texture: "https://picsum.photos/id/1030/1024/512", type: "exoplanet" },
+            { name: "TRAPPIST-1e", radius: 0.6, color: 0xda70d6, description: "Earth-sized planet in the TRAPPIST-1 system", texture: "https://picsum.photos/id/1035/1024/512", type: "exoplanet" },
+            { name: "51 Pegasi b", radius: 1.2, color: 0xff6347, description: "The first exoplanet discovered orbiting a Sun-like star", texture: "https://picsum.photos/id/1040/1024/512", type: "exoplanet" },
+            // Solar System
+            { name: "Sun", radius: 5, color: 0xffff00, description: "The star at the center of our Solar System", texture: "https://picsum.photos/id/1050/1024/512", type: "star" },
+            { name: "Mercury", radius: 0.2, color: 0x8b8b8b, description: "The smallest planet in our Solar System", texture: "https://picsum.photos/id/1060/1024/512", type: "planet" },
+            { name: "Venus", radius: 0.5, color: 0xffa500, description: "Often called Earth's sister planet", texture: "https://picsum.photos/id/1070/1024/512", type: "planet" },
+            { name: "Earth", radius: 0.5, color: 0x0000ff, description: "Our home planet", texture: "https://picsum.photos/id/1080/1024/512", type: "planet" },
+            { name: "Mars", radius: 0.3, color: 0xff0000, description: "The Red Planet", texture: "https://picsum.photos/id/1090/1024/512", type: "planet" },
+            { name: "Jupiter", radius: 2, color: 0xffa07a, description: "The largest planet in our Solar System", texture: "https://picsum.photos/id/1100/1024/512", type: "planet" },
+            { name: "Saturn", radius: 1.8, color: 0xffd700, description: "Known for its prominent ring system", texture: "https://picsum.photos/id/1110/1024/512", type: "planet" },
+            { name: "Uranus", radius: 1.2, color: 0x00ced1, description: "An ice giant planet", texture: "https://picsum.photos/id/1120/1024/512", type: "planet" },
+            { name: "Neptune", radius: 1.1, color: 0x4169e1, description: "The windiest planet in our Solar System", texture: "https://picsum.photos/id/1130/1024/512", type: "planet" }
+        ];
+
+        // Create celestial bodies
+        const celestialObjects = {};
+        celestialBodies.forEach((body, index) => {
+            const geometry = new THREE.SphereGeometry(body.radius, 64, 64);
+            
+            // Load texture
+            const texture = textureLoader.load(body.texture);
+            
+            // Create material with texture and other properties
+            const material = new THREE.MeshPhongMaterial({
+                map: texture,
+                bumpMap: texture,
+                bumpScale: 0.05,
+                specular: new THREE.Color(0x333333),
+                shininess: 25
+            });
+            
+            const celestialBody = new THREE.Mesh(geometry, material);
+            celestialBody.position.set(Math.random() * 80 - 40, Math.random() * 80 - 40, Math.random() * 80 - 100);
+            scene.add(celestialBody);
+            celestialObjects[body.name] = celestialBody;
+
+            // Add atmosphere for planets and exoplanets
+            if (body.type !== "star") {
+                const atmosphereGeometry = new THREE.SphereGeometry(body.radius * 1.1, 64, 64);
+                const atmosphereMaterial = new THREE.ShaderMaterial({
+                    transparent: true,
+                    side: THREE.BackSide,
+                    uniforms: {
+                        color: { value: new THREE.Color(body.color) }
+                    },
+                    vertexShader: `
+                        varying vec3 vNormal;
+                        void main() {
+                            vNormal = normalize(normalMatrix * normal);
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform vec3 color;
+                        varying vec3 vNormal;
+                        void main() {
+                            float intensity = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
+                            gl_FragColor = vec4(color, 1.0) * intensity;
+                        }
+                    `
+                });
+                const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+                celestialBody.add(atmosphere);
+            }
+
+            // Add to list
+            const listItem = document.createElement('div');
+            listItem.className = 'celestial-item neumorphic';
+            listItem.textContent = body.name;
+            listItem.addEventListener('click', () => focusOnCelestialBody(body.name));
+            document.getElementById('celestial-list').appendChild(listItem);
+        });
+
+        // Focus on a celestial body
+        function focusOnCelestialBody(bodyName) {
+            const celestialBody = celestialObjects[bodyName];
+            const body = celestialBodies.find(b => b.name === bodyName);
+
+            gsap.to(camera.position, {
+                duration: 2,
+                x: celestialBody.position.x,
+                y: celestialBody.position.y,
+                z: celestialBody.position.z + 10,
+                onUpdate: function() {
+                    camera.lookAt(celestialBody.position);
+                }
+            });
+
+            document.getElementById('info-panel').innerHTML = `
+                <h2>${body.name}</h2>
+                <p>${body.description}</p>
+                <p>Type: ${body.type.charAt(0).toUpperCase() + body.type.slice(1)}</p>
+                <p>Radius: ${body.radius} Earth radii</p>
+            `;
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            Object.values(celestialObjects).forEach(body => {
+                body.rotation.y += 0.005;
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Initialize tooltips for points
+        const points = document.querySelectorAll('.point');
+        points.forEach(point => {
+            const tooltip = document.createElement('div');
+            tooltip.style.position = 'absolute';
+            tooltip.style.background = 'rgba(0, 0, 0, 0.8)';
+            tooltip.style.color = '#fff';
+            tooltip.style.padding = '5px';
+            tooltip.style.borderRadius = '5px';
+            tooltip.style.display = 'none';
+            tooltip.style.zIndex = '1000';
+            tooltip.textContent = point.title;
+            document.body.appendChild(tooltip);
+
+            point.addEventListener('mouseover', (e) => {
+                tooltip.style.display = 'block';
+                tooltip.style.left = e.pageX + 10 + 'px';
+                tooltip.style.top = e.pageY + 10 + 'px';
+            });
+
+            point.addEventListener('mouseout', () => {
+                tooltip.style.display = 'none';
+            });
+
+            point.addEventListener('mousemove', (e) => {
+                tooltip.style.left = e.pageX + 10 + 'px';
+                tooltip.style.top = e.pageY + 10 + 'px';
+            });
+        });
+
+        // Dark mode toggle
+        const darkModeToggle = document.getElementById('dark-mode-toggle');
+        darkModeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+        });
+
+        // Mode toggle (Exoplanets / Solar System)
+        const modeToggle = document.getElementById('mode-toggle');
+        let currentMode = 'exoplanet';
+        modeToggle.addEventListener('click', () => {
+            currentMode = currentMode === 'exoplanet' ? 'solar' : 'exoplanet';
+            modeToggle.textContent = `Switch to ${currentMode === 'exoplanet' ? 'Solar System' : 'Exoplanets'}`;
+            updateCelestialList();
+        });
+
+        function updateCelestialList() {
+            const celestialList = document.getElementById('celestial-list');
+            celestialList.innerHTML = '';
+            celestialBodies.forEach(body => {
+                if ((currentMode === 'exoplanet' && body.type === 'exoplanet') || (currentMode === 'solar' && body.type !== 'exoplanet')) {
+                    const listItem = document.createElement('div');
+                    listItem.className = 'celestial-item neumorphic';
+                    listItem.textContent = body.name;
+                    listItem.addEventListener('click', () => focusOnCelestialBody(body.name));
+                    celestialList.appendChild(listItem);
+                }
+            });
+        }
+
+        // Initial list update
+        updateCelestialList();
+
+        // Particles.js
+        particlesJS("particles-js", {
+            particles: {
+                number: { value: 100, density: { enable: true, value_area: 800 } },
+                color: { value: "#ffffff" },
+                shape: { type: "circle", stroke: { width: 0, color: "#000000" }, polygon: { nb_sides: 5 } },
+                opacity: { value: 0.5, random: true, anim: { enable: false, speed: 1, opacity_min: 0.1, sync: false } },
+                size: { value: 3, random: true, anim: { enable: false, speed: 40, size_min: 0.1, sync: false } },
+                line_linked: { enable: true, distance: 150, color: "#ffffff", opacity: 0.4, width: 1 },
+                move: { enable: true, speed: 6, direction: "none", random: false, straight: false, out_mode: "out", bounce: false, attract: { enable: false, rotateX: 600, rotateY: 1200 } }
+            },
+            interactivity: {
+                detect_on: "canvas",
+                events: { onhover: { enable: true, mode: "repulse" }, onclick: { enable: true, mode: "push" }, resize: true },
+                modes: { grab: { distance: 400, line_linked: { opacity: 1 } }, bubble: { distance: 400, size: 40, duration: 2, opacity: 8, speed: 3 }, repulse: { distance: 200, duration: 0.4 }, push: { particles_nb: 4 }, remove: { particles_nb: 2 } }
+            },
+            retina_detect: true
+        });
+    </script>
+</body>
+</html>
